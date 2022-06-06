@@ -16,7 +16,7 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 
 /** EasyAmapLocationPlugin */
-class EasyAmapLocationPlugin: FlutterPlugin, MethodCallHandler, AMapLocationListener {
+class EasyAmapLocationPlugin: FlutterPlugin, MethodCallHandler, AMapLocationListener, EventChannel.StreamHandler {
 
   private lateinit var channel : MethodChannel
 
@@ -26,14 +26,13 @@ class EasyAmapLocationPlugin: FlutterPlugin, MethodCallHandler, AMapLocationList
 
   private lateinit var activity: FlutterActivity
 
-  private lateinit var isLocation: false
+  private var isLocation: Boolean = false
 
   private lateinit var eventChannel: EventChannel
 
   var eventSink: EventChannel.EventSink? = null
 
   private val TAG = "easy_amap_location"
-
 
   //备份至
   private var onceLocation = false
@@ -61,7 +60,16 @@ class EasyAmapLocationPlugin: FlutterPlugin, MethodCallHandler, AMapLocationList
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
     when(call.method) {
       "getLocation" -> {
-        result.success(getLocation())
+        result.success(getLocation(result))
+      }
+      "setApi" -> {
+
+      }
+      "startLocation" -> {
+
+      }
+      "stopLocation" -> {
+
       }
     }
   }
@@ -73,11 +81,20 @@ class EasyAmapLocationPlugin: FlutterPlugin, MethodCallHandler, AMapLocationList
   private fun getLocation(result: Result): Boolean {
     option.isOnceLocation = true
     val listener = AMapLocationListener { aMapLocation -> //恢复原来的值
-      result.success(resultToMap(aMapLocation))
+      result.success(aMapLocation)
       stopLocation()
     }
     startLocation(listener)
     return true
+  }
+
+  private fun startLocation(listener: AMapLocationListener): Boolean {
+    synchronized(this) {
+      locationClient.setLocationListener(listener)
+      locationClient.startLocation()
+      isLocation = true
+      return true
+    }
   }
 
   private fun stopLocation(): Boolean {
@@ -96,5 +113,13 @@ class EasyAmapLocationPlugin: FlutterPlugin, MethodCallHandler, AMapLocationList
     option = AMapLocationClientOption()
     option.locationMode = AmapOptionUtil.mode(params["mode"] as String)
     locationClient.setLocationOption(option)
+  }
+
+  override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+    TODO("Not yet implemented")
+  }
+
+  override fun onCancel(arguments: Any?) {
+    TODO("Not yet implemented")
   }
 }
