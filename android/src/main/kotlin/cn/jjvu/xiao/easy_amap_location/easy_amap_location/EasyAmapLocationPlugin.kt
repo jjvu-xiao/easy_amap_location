@@ -1,125 +1,142 @@
 package cn.jjvu.xiao.easy_amap_location.easy_amap_location
 
-import android.os.Handler
-import android.util.Log
+import android.content.Context
+import android.text.TextUtils
 import androidx.annotation.NonNull
-import com.amap.api.location.AMapLocation
 import com.amap.api.location.AMapLocationClient
-import com.amap.api.location.AMapLocationClientOption
-import com.amap.api.location.AMapLocationListener
-import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import java.util.concurrent.ConcurrentHashMap
 
 /** EasyAmapLocationPlugin */
-class EasyAmapLocationPlugin: FlutterPlugin, MethodCallHandler, AMapLocationListener, EventChannel.StreamHandler {
+class EasyAmapLocationPlugin: FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
 
-  private lateinit var channel : MethodChannel
+  companion object {
+    private val CHANNEL_NAME = "easy_amap_location"
+    private val EVENT_NAME = "easy_amap_location/event"
+  }
 
-  private lateinit var option: AMapLocationClientOption
-
-  private lateinit var locationClient: AMapLocationClient
-
-  private lateinit var activity: FlutterActivity
-
-  private var isLocation: Boolean = false
-
-  private lateinit var eventChannel: EventChannel
+  private lateinit var context: Context
 
   var eventSink: EventChannel.EventSink? = null
 
-  private val TAG = "easy_amap_location"
-
-  //备份至
-  private var onceLocation = false
-
-  override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-    channel = MethodChannel(flutterPluginBinding.binaryMessenger, "easy_amap_location")
-    channel.setMethodCallHandler(this)
-    locationClient = AMapLocationClient(flutterPluginBinding.applicationContext)
-    eventChannel = EventChannel(flutterPluginBinding.binaryMessenger, "easy_amap_location/event")
-    eventChannel.setStreamHandler(object : EventChannel.StreamHandler {
-      override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-        eventSink = events
-        Log.d("${TAG}A", "EventChannel onListen called")
-        Handler().postDelayed({
-          eventSink?.success("Android")
-        }, 500)
-      }
-
-      override fun onCancel(arguments: Any?) {
-        Log.w("${TAG}A" , "EventChannel onCancel called")
-      }
-    })
-  }
+  private var locationClientMap: MutableMap<String, AmapLocationImpl> = ConcurrentHashMap<String, AmapLocationImpl>(8)
 
   override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
-    when(call.method) {
-      "getLocation" -> {
-        result.success(getLocation(result))
+    val args: Map<*, *> = call.arguments as Map<*, *>
+    when (call.method) {
+      "setApiKey" -> {
+        setApiKey(args)
       }
-      "setApi" -> {
-
+      "setLocationOption" -> {
+        setLocationOption(args)
       }
       "startLocation" -> {
-
+        startLocation(args)
       }
       "stopLocation" -> {
-
+        stopLocation(args)
+      }
+      "destroy" -> {
+        destroy(args)
+      }
+      else -> {
+        result.notImplemented()
       }
     }
-  }
-
-  override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
-    channel.setMethodCallHandler(null)
-  }
-
-  private fun getLocation(result: Result): Boolean {
-    option.isOnceLocation = true
-    val listener = AMapLocationListener { aMapLocation -> //恢复原来的值
-      result.success(aMapLocation)
-      stopLocation()
-    }
-    startLocation(listener)
-    return true
-  }
-
-  private fun startLocation(listener: AMapLocationListener): Boolean {
-    synchronized(this) {
-      locationClient.setLocationListener(listener)
-      locationClient.startLocation()
-      isLocation = true
-      return true
-    }
-  }
-
-  private fun stopLocation(): Boolean {
-    synchronized(this) {
-      locationClient.stopLocation()
-      isLocation = false
-      return true
-    }
-  }
-
-  override fun onLocationChanged(location: AMapLocation?) {
-    eventSink?.success(location)
-  }
-
-  fun initOption(params: Map<String, Any?>) {
-    option = AMapLocationClientOption()
-    option.locationMode = AmapOptionUtil.mode(params["mode"] as String)
-    locationClient.setLocationOption(option)
   }
 
   override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
-    TODO("Not yet implemented")
+    eventSink = events
   }
 
   override fun onCancel(arguments: Any?) {
-    TODO("Not yet implemented")
+    locationClientMap.forEach{
+      it.value.stopLocation()
+    }
   }
+
+  fun startLocation(argsMap: Map<*, *>) {
+    val client = getLocationClientImp(argsMap)
+    client?.startLocation()
+  }
+
+  fun stopLocation(argsMap: Map<*, *>) {
+    val client = getLocationClientImp(argsMap)
+    client?.stopLocation()
+  }
+
+
+  fun destroy(argsMap: Map<*, *>) {
+    val client = getLocationClientImp(argsMap)
+    client?.destroy()
+    locationClientMap.remove(getPluginKeyFromArgs(argsMap))
+  }
+
+  fun setApiKey(apiKeyMap: Map<*, *>?) {
+    if (null != apiKeyMap) {
+      if (apiKeyMap.containsKey("android")
+        && !TextUtils.isEmpty(apiKeyMap["android"] as String?)
+      ) {
+        AMapLocationClient.setApiKey(apiKeyMap["android"] as String?)
+      }
+    }
+  }
+
+  fun setLocationOption(argsMap: Map<*, *>) {
+    val client = getLocationClientImp(argsMap)
+    client?.setLocationOption(argsMap)
+  }
+
+  override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    if (null == context) {
+      context = binding.applicationContext
+      val channel = MethodChannel(binding.binaryMessenger, CHANNEL_NAME)
+      channel.setMethodCallHandler(this)
+      val eventChannel = EventChannel(binding.binaryMessenger, EVENT_NAME)
+      eventChannel.setStreamHandler(this)
+    }
+  }
+
+  override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+    locationClientMap.forEach {
+      it.value.destroy()
+    }
+  }
+
+  private fun getLocationClientImp(argsMap: Map<*, *>): AmapLocationImpl? {
+    if (null == locationClientMap) {
+      locationClientMap = ConcurrentHashMap(8)
+    }
+    val pluginKey = getPluginKeyFromArgs(argsMap)
+    if (TextUtils.isEmpty(pluginKey)) {
+      return null
+    }
+    if (!locationClientMap.containsKey(pluginKey)) {
+      val locationClientImp = AmapLocationImpl(
+        context,
+        pluginKey!!,
+        eventSink
+      )
+      locationClientMap[pluginKey] = locationClientImp
+    }
+    return locationClientMap[pluginKey]
+  }
+
+  private fun getPluginKeyFromArgs(argsMap: Map<*, *>?): String? {
+    var pluginKey: String? = null
+    try {
+      if (null != argsMap) {
+        pluginKey = argsMap["pluginKey"] as String?
+      }
+    } catch (e: Throwable) {
+      e.printStackTrace()
+    }
+    return pluginKey
+  }
+
 }

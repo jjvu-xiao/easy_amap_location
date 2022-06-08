@@ -58,7 +58,7 @@ class AmapLocationImpl(
         if (null == mEventSink) {
             return
         }
-        val result: MutableMap<String, Any> = Utils.buildLocationResultMap(location)
+        val result: MutableMap<String, Any> = Utils.buildLocationResultMap(location).toMutableMap()
         result["pluginKey"] = mPluginKey
         mEventSink.success(result)
     }

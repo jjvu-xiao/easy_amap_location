@@ -1,26 +1,25 @@
-import 'package:flutter/foundation.dart';
 
 import 'latLng.dart';
 
 /// 定位结果 model
 class Location {
   Location({
-    @required this.address,
-    @required this.latLng,
-    @required this.altitude,
-    @required this.bearing,
-    @required this.country,
-    @required this.province,
-    @required this.city,
-    @required this.cityCode,
-    @required this.adCode,
-    @required this.district,
-    @required this.poiName,
-    @required this.street,
-    @required this.streetNumber,
-    @required this.aoiName,
-    @required this.accuracy,
-    @required this.speed,
+    required this.address,
+    required this.latLng,
+    required this.altitude,
+    required this.bearing,
+    required this.country,
+    required this.province,
+    required this.city,
+    required this.cityCode,
+    required this.adCode,
+    required this.district,
+    required this.poiName,
+    required this.street,
+    required this.streetNumber,
+    required this.aoiName,
+    required this.accuracy,
+    required this.speed,
   });
 
   /// 地址全称

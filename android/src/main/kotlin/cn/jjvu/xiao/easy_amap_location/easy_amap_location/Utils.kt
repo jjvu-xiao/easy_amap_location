@@ -6,7 +6,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 
 object Utils {
-    fun buildLocationResultMap(location: AMapLocation?): Map<String, Any> {
+    fun buildLocationResultMap(location: AMapLocation?): MutableMap<String, Any> {
         val result: MutableMap<String, Any> = LinkedHashMap()
         result["callbackTime"] = formatUTC(System.currentTimeMillis(), null)
         if (null != location) {
